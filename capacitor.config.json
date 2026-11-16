@@ -1,0 +1,12 @@
+{
+  "appId": "com.blackcraft.game",
+  "appName": "BlackCraft",
+  "webDir": "www",
+  "backgroundColor": "#000000",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
