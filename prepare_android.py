@@ -16,6 +16,8 @@ import sys
 ROOT = os.path.dirname(os.path.abspath(__file__))
 APP_ID = "com.blackcraft.game"
 MIN_SDK = 24
+VERSION_NAME = "1.01"
+VERSION_CODE = 2
 GAME_FILES = [
     "index.html", "manifest.webmanifest", "sw.js",
     "icon-192.png", "icon-512.png", "icon-maskable-512.png",
@@ -131,6 +133,30 @@ def check_gradle_values(android):
     print("applicationId:", APP_ID, "— OK")
 
 
+def set_version(android):
+    path = os.path.join(android, "app", "build.gradle")
+    s = read(path)
+    s2 = re.sub(r"(versionCode\s+)\d+", lambda m: m.group(1) + str(VERSION_CODE), s, count=1)
+    s2 = re.sub(r'(versionName\s+)"[^"]*"', lambda m: m.group(1) + '"%s"' % VERSION_NAME, s2, count=1)
+    if s2 == s and ("versionCode %d" % VERSION_CODE) not in s:
+        print("::warning::Не удалось записать версию в app/build.gradle (версия останется по умолчанию)")
+    else:
+        write(path, s2)
+        print("Версия приложения: %s (versionCode %d)" % (VERSION_NAME, VERSION_CODE))
+
+
+def install_keystore():
+    src = p("blackcraft-debug.keystore")
+    if not os.path.isfile(src):
+        print("::warning::Нет blackcraft-debug.keystore: APK будет подписан случайным ключом, "
+              "обновление поверх старой версии потребует удалить старую")
+        return
+    dst_dir = os.path.join(os.path.expanduser("~"), ".android")
+    os.makedirs(dst_dir, exist_ok=True)
+    shutil.copy(src, os.path.join(dst_dir, "debug.keystore"))
+    print("Постоянный ключ подписи установлен (обновления ставятся поверх)")
+
+
 def install_main_activity(android):
     java_root = os.path.join(android, "app", "src", "main", "java")
     dest_dir = os.path.join(java_root, *APP_ID.split("."))
@@ -186,6 +212,8 @@ def native():
     install_main_activity(android)
     patch_manifest(android)
     check_gradle_values(android)
+    set_version(android)
+    install_keystore()
     make_icons(android)
     print("Настройки BlackCraft применены")
 

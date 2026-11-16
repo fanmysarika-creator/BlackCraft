@@ -116,7 +116,7 @@ body.touch.creative #bfly{display:flex}
  <div class="lw">
   <div class="lside">
     <div class="logo">BLACK<span>CRAFT</span></div>
-    <div class="lver">Лаунчер · версия 1.0</div>
+    <div class="lver">Лаунчер · версия 1.01</div>
     <button class="ln on" data-t="play">▶ Играть</button>
     <button class="ln" data-t="news">📰 Новости</button>
     <button class="ln" data-t="set">⚙ Настройки</button>
@@ -131,7 +131,15 @@ body.touch.creative #bfly{display:flex}
         <div class="lhint" id="tchint" style="display:none">Стик — ходьба · свайп — осмотр · тап — поставить/использовать<br>удерживай палец на блоке — ломать · 🎒 — инвентарь · 📷 — вид от 3-го лица</div>
       </div>
       <div class="ltab" id="t-news" style="display:none">
-        <h3>Что нового в BlackCraft 1.0</h3>
+        <h3>Что нового в BlackCraft 1.01</h3>
+        <ul>
+          <li>🔊 Звуковые эффекты: шаги, прыжок, приземление, ломание и установка блоков (камень, дерево, земля звучат по-разному)</li>
+          <li>🔊 Звуки воды, еды, подбора предметов, крафта, урона и смерти</li>
+          <li>🔊 Голоса мобов: свинья, корова, овца и зомби, ближе слышнее</li>
+          <li>🔊 Звуки кнопок меню; громкость настраивается в лаунчере и в паузе</li>
+          <li>Звуки создаются самой игрой, интернет не нужен</li>
+        </ul>
+        <h3>Версия 1.0</h3>
         <ul>
           <li>Бесконечный мир с 8 биомами: океан, пляж, равнины, лес, пустыня, тайга, тундра, горы</li>
           <li>Озёра, пещеры, лавовые озёра и шахты с рудами и лампами</li>
@@ -149,13 +157,14 @@ body.touch.creative #bfly{display:flex}
         <label class="lrow">Поле зрения<select id="sFovL"></select></label>
         <label class="lrow">Чувствительность мыши<select id="sSensL"></select></label>
         <label class="lrow">Отладочная информация<select id="sInfoL"><option value="1">Включена</option><option value="0">Выключена</option></select></label>
+        <label class="lrow">Громкость звуков<select id="sVolL"></select></label>
         <button class="lreset" id="lReset">Сбросить настройки</button>
       </div>
     </div>
     <div class="lbar">
       <label>Ник<input id="inNick" maxlength="16" autocomplete="off" spellcheck="false"></label>
       <label>Режим<select id="inMode"><option value="survival">Выживание</option><option value="creative">Творчество</option></select></label>
-      <label>Версия<select id="inVer"><option>BlackCraft 1.0</option></select></label>
+      <label>Версия<select id="inVer"><option>BlackCraft 1.01</option></select></label>
       <button id="lPlay">ИГРАТЬ</button>
     </div>
     <div id="lprog"><i></i><span id="lprogT"></span></div>
@@ -175,6 +184,7 @@ body.touch.creative #bfly{display:flex}
   <button class="mcbtn" id="sFov">Поле зрения: 70</button>
   <button class="mcbtn" id="sSens">Чувствительность: 100%</button>
   <button class="mcbtn" id="sInfo">Отладочная информация: Вкл</button>
+  <button class="mcbtn" id="sVol">Звуки: 60%</button>
   <button class="mcbtn" id="sBack">Готово</button>
 </div>
 <div id="dead" class="screen">
@@ -673,6 +683,58 @@ function drawDyn(vb,M,fog,fr,sun){
 function itemTiles(id){if(BL[id])return BL[id].tex;const t=IT[id].tile;return[t,t,t];}
 // ===== Состояние игры =====
 const $=id=>document.getElementById(id);
+// ===== Звуки BlackCraft 1.01 (WebAudio: звуки создаются кодом, файлов нет, работает офлайн) =====
+let stepAcc=0;
+const SFX=(()=>{
+  let ctx=null,master=null,nbuf=null,vol=.6,active=0,amb=4;const last={};
+  function init(){if(ctx)return ctx;try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;
+    ctx=new AC();master=ctx.createGain();master.gain.value=vol;master.connect(ctx.destination);
+    const n=ctx.sampleRate,b=ctx.createBuffer(1,n,ctx.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;nbuf=b;}catch(e){ctx=null;}return ctx;}
+  function unlock(){if(!init())return;if(ctx.state==="suspended")ctx.resume().catch(()=>{});}
+  function setVol(v){vol=+v||0;if(master)master.gain.value=vol;}
+  function can(name,gap){if(vol<=0||!ctx||active>14)return false;const t=performance.now();if(last[name]&&t-last[name]<gap)return false;last[name]=t;return true;}
+  function env(g,t,a,d,v){g.gain.setValueAtTime(0.0001,t);g.gain.linearRampToValueAtTime(v,t+a);g.gain.exponentialRampToValueAtTime(0.0001,t+a+d);}
+  function tone(f,d,type,v,slide,delay){try{const t=ctx.currentTime+(delay||0),o=ctx.createOscillator(),g=ctx.createGain();o.type=type||"square";
+    o.frequency.setValueAtTime(f,t);if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(20,f*slide),t+d);env(g,t,.005,d,v);
+    o.connect(g);g.connect(master);active++;o.onended=()=>{active--;};o.start(t);o.stop(t+d+.05);}catch(e){}}
+  function noise(d,fq,v,q,delay,type){try{const t=ctx.currentTime+(delay||0),s=ctx.createBufferSource(),f=ctx.createBiquadFilter(),g=ctx.createGain();
+    s.buffer=nbuf;s.playbackRate.value=.8+Math.random()*.4;f.type=type||"lowpass";f.frequency.value=fq;f.Q.value=q||1;env(g,t,.004,d,v);
+    s.connect(f);f.connect(g);g.connect(master);active++;s.onended=()=>{active--;};s.start(t,Math.random()*.4,d+.05);}catch(e){}}
+  const R=()=>Math.random();
+  const api={
+    unlock,setVol,vol:()=>vol,
+    click(){if(!can("click",40))return;tone(660,.05,"square",.1,.7);},
+    brk(tool){if(!can("brk",30))return;
+      if(tool==="pickaxe"){noise(.16,1900,.5,1);tone(190,.08,"triangle",.2,.5);}
+      else if(tool==="axe"){noise(.12,950,.45,1);tone(130,.1,"square",.16,.6);}
+      else{noise(.15,700,.42,1);tone(110,.07,"triangle",.14,.7);}},
+    put(){if(!can("put",30))return;noise(.08,650,.35,1);tone(150,.06,"triangle",.2,.7);},
+    step(){if(!can("step",120))return;noise(.06,380+R()*260,.16,1);},
+    jump(){if(!can("jump",150))return;tone(250,.12,"square",.07,1.8);},
+    land(d){if(!can("land",150))return;const k=Math.min(1,d/8);noise(.12,420,.25+.3*k,1);tone(90,.1,"triangle",.2+.2*k,.6);},
+    hurt(){if(!can("hurt",200))return;tone(230,.25,"sawtooth",.2,.4);noise(.1,1300,.18,1);},
+    die(){if(!can("die",500))return;tone(320,.8,"sawtooth",.22,.18);noise(.4,500,.2,1);},
+    eat(){if(!can("eat",300))return;for(let i=0;i<3;i++)noise(.05,1500,.25,2,i*.11,"bandpass");},
+    pick(){if(!can("pick",60))return;tone(880,.07,"sine",.14,1.5);tone(1320,.08,"sine",.1,1.2,.05);},
+    splash(){if(!can("splash",250))return;noise(.3,1500,.3,.7,0,"bandpass");noise(.2,500,.2,1);},
+    craft(){if(!can("craft",100))return;tone(520,.08,"triangle",.16);tone(780,.12,"triangle",.16,1,.08);},
+    mobHit(){if(!can("mobHit",80))return;tone(200,.12,"square",.14,.6);noise(.08,1000,.14,1);},
+    mobDie(){if(!can("mobDie",150))return;tone(190,.28,"sawtooth",.14,.4);},
+    mob(type,k){k=k||1;if(!can("mob"+type,300))return;
+      if(type==="pig"){tone(170,.16,"square",.12*k,1.4);tone(140,.13,"square",.11*k,1.2,.14);}
+      else if(type==="cow"){tone(115,.65,"sawtooth",.12*k,.82);}
+      else if(type==="sheep"){tone(340,.18,"sawtooth",.1*k,.9);tone(330,.2,"sawtooth",.1*k,.85,.2);}
+      else{tone(95,.7,"sawtooth",.13*k,.7);noise(.5,420,.1*k,1);}},
+    ambient(dt){amb-=dt;if(amb>0||vol<=0||!ctx)return;amb=4+R()*6;
+      if(typeof mobs==="undefined"||!mobs.length)return;
+      const m=mobs[Math.floor(R()*mobs.length)],d=Math.hypot(m.x-P.x,m.z-P.z);if(d>20)return;api.mob(m.type,1-d/22);}
+  };
+  return api;
+})();
+addEventListener("pointerdown",()=>SFX.unlock(),true);
+addEventListener("keydown",()=>SFX.unlock(),true);
+addEventListener("touchend",()=>SFX.unlock(),true);
+document.addEventListener("click",e=>{const t=e.target&&e.target.closest&&e.target.closest("button,.mcbtn,.ln,.tb");if(t)SFX.click();},true);
 const opt={rd:6,fov:70,sens:1,info:true};
 const G={mode:"survival",ui:"title",started:false,time:0.28,dead:false};
 const inv=new Array(36).fill(null);
@@ -713,7 +775,7 @@ rec(B.GLASS,1,[[[B.SAND],1],[[I.COAL],1]],2);
 rec(I.COAL,1,[[LOGS,1],[[B.PLANKS],1]],2);
 [[I.PORK,I.CPORK],[I.BEEF,I.STEAK],[I.MUTTON,I.CMUTTON]].forEach(([a,b])=>rec(b,1,[[[a],1],[[I.COAL],1]],2));
 const canCraft=r=>r.ing.every(([a,n])=>countOf(a)>=n);
-function doCraft(r){if(!canCraft(r))return false;
+function doCraft(r){if(!canCraft(r))return false;SFX.craft();
   const free=inv.some(s=>!s)||inv.some(s=>s&&s.id===r.out&&s.count+r.n<=stackOf(r.out));if(!free)return false;
   r.ing.forEach(([a,n])=>takeOf(a,n));addItem(r.out,r.n);return true;}
 // ===== Слоты (DOM) =====
@@ -810,8 +872,8 @@ const keys={};let joyX=0,joyY=0,isTouch=false;
 function hits(px,py,pz){
   for(let x=Math.floor(px-HW);x<=Math.floor(px+HW);x++)for(let y=Math.floor(py);y<=Math.floor(py+PH);y++)for(let z=Math.floor(pz-HW);z<=Math.floor(pz+HW);z++)if(isSolid(x,y,z))return true;
   return false;}
-function hurt(n){if(G.mode==="creative"||G.dead||n<=0)return;P.health=Math.max(0,P.health-n);const f=$("flash");f.style.transition="none";f.style.opacity=.55;requestAnimationFrame(()=>{f.style.transition="opacity .4s";f.style.opacity=0;});renderBars();if(P.health<=0)die();}
-function die(){G.dead=true;G.ui="dead";if(document.pointerLockElement)document.exitPointerLock();$("dead").style.display="flex";}
+function hurt(n){if(G.mode==="creative"||G.dead||n<=0)return;P.health=Math.max(0,P.health-n);SFX.hurt();const f=$("flash");f.style.transition="none";f.style.opacity=.55;requestAnimationFrame(()=>{f.style.transition="opacity .4s";f.style.opacity=0;});renderBars();if(P.health<=0)die();}
+function die(){SFX.die();G.dead=true;G.ui="dead";if(document.pointerLockElement)document.exitPointerLock();$("dead").style.display="flex";}
 function respawn(){G.dead=false;P.health=20;P.food=20;P.sat=5;P.air=15;P.x=P.sx;P.y=P.sy;P.z=P.sz;P.vx=P.vy=P.vz=0;P.peak=P.y;$("dead").style.display="none";G.ui="game";renderBars();if(typeof resumeGame==="function")resumeGame();}
 function findSpawn(){
   for(let r=0;r<600;r+=6)for(let a=0;a<(r?8:1);a++){const x=Math.round(Math.cos(a*.785)*r),z=Math.round(Math.sin(a*.785)*r);
@@ -822,7 +884,7 @@ function placePlayerAtSpawn(){const[x,z]=findSpawn();P.sx=P.x=x+.5;P.sz=P.z=z+.5
 function updatePlayer(dt){
   const fx=Math.floor(P.x),fz=Math.floor(P.z);
   const body=getBlock(fx,Math.floor(P.y+.5),fz),feet=getBlock(fx,Math.floor(P.y+.1),fz),head=getBlock(fx,Math.floor(P.y+EYE),fz);
-  P.inWater=body===B.WATER||feet===B.WATER;P.headW=head===B.WATER;P.inLava=body===B.LAVA||feet===B.LAVA;
+  P.inWater=body===B.WATER||feet===B.WATER;P.headW=head===B.WATER;P.inLava=body===B.LAVA||feet===B.LAVA;if(P.inWater&&!SFX._w)SFX.splash();SFX._w=P.inWater;
   const ax=Math.max(-1,Math.min(1,(keys.KeyD?1:0)-(keys.KeyA?1:0)+joyX)),az=Math.max(-1,Math.min(1,(keys.KeyW?1:0)-(keys.KeyS?1:0)-joyY));
   const sprint=!!(keys.ShiftLeft||keys.ShiftRight||Math.hypot(joyX,joyY)>.92);
   const sn=Math.sin(P.yaw),cs=Math.cos(P.yaw);let dx=-sn*az+cs*ax,dz=-cs*az-sn*ax;const l=Math.hypot(dx,dz);if(l>1){dx/=l;dz/=l;}
@@ -836,19 +898,19 @@ function updatePlayer(dt){
     P.vy=Math.max(-3.5,P.vy-(P.inLava?10:14)*dt);
     if(keys.Space)P.vy=Math.min(P.vy+28*dt,P.inLava?2.5:3.6);
     if(keys.Space&&!P.headW&&!P.inLava&&P.vy>0&&(getBlock(fx,Math.floor(P.y+1.2),fz)===0))P.vy=Math.max(P.vy,5.5);
-  }else{P.vy=Math.max(-60,P.vy-32*dt);if(keys.Space&&P.ground){P.vy=9;P.exh+=.05;}}
+  }else{P.vy=Math.max(-60,P.vy-32*dt);if(keys.Space&&P.ground){P.vy=9;P.exh+=.05;SFX.jump();}}
   // движение с коллизиями
   const nx=P.x+P.vx*dt;if(hits(nx,P.y,P.z)){if(isTouch&&P.ground&&moving&&!hits(nx,P.y+1.01,P.z)&&!P.inWater)P.vy=9;P.vx=0;}else P.x=nx;
   const nz=P.z+P.vz*dt;if(hits(P.x,P.y,nz)){if(isTouch&&P.ground&&moving&&!hits(P.x,P.y+1.01,nz)&&!P.inWater)P.vy=9;P.vz=0;}else P.z=nz;
   const wasG=P.ground;const ny=P.y+P.vy*dt;P.ground=false;
   if(hits(P.x,ny,P.z)){if(P.vy<0)P.ground=true;P.vy=0;}else P.y=ny;
   if(P.ground||P.inWater||P.inLava||P.fly){
-    if(P.ground&&!wasG&&!P.inWater&&!P.fly){const dist=P.peak-P.y;if(dist>3)hurt(Math.floor(dist-3));}
+    if(P.ground&&!wasG&&!P.inWater&&!P.fly){const dist=P.peak-P.y;if(dist>1.5)SFX.land(dist);if(dist>3)hurt(Math.floor(dist-3));}
     P.peak=P.y;}
   else if(P.y>P.peak)P.peak=P.y;
   if(P.y<-30){P.y=surfaceY(Math.floor(P.x),Math.floor(P.z));P.peak=P.y;}
   P.swing=Math.max(0,P.swing-dt*4);
-  if(moving&&P.ground)P.bob+=dt*(sprint?11:8);
+  if(moving&&P.ground){P.bob+=dt*(sprint?11:8);stepAcc+=dt*(sprint?11:8);if(stepAcc>=Math.PI){stepAcc-=Math.PI;SFX.step();}}
   if(G.mode!=="survival")return;
   // голод, лечение, урон
   const dist=Math.hypot(P.vx,P.vz)*dt;if(P.ground||P.inWater)P.exh+=dist*(sprint&&P.food>6?.1:.004);
@@ -875,7 +937,7 @@ let mineT=0,mineKey="",mineCool=0;
 function useDurability(n){const s=inv[sel];if(!s||G.mode==="creative")return;const t=IT[s.id]&&IT[s.id].tool;if(!t)return;s.dur-=n;if(s.dur<=0)inv[sel]=null;hotbarDirty=true;}
 function breakBlock(x,y,z){
   const id=getBlock(x,y,z),b=BL[id];if(!b||b.hard<0)return;
-  setBlock(x,y,z,0);
+  setBlock(x,y,z,0);SFX.brk(b.tool);
   if(b.ice){const bl=getBlock(x,y-1,z);if(bl>0&&BL[bl].solid||bl===B.WATER)setBlock(x,y,z,B.WATER,0);}
   if(G.mode==="survival"){
     const t=toolOf(),match=t&&t.type===b.tool,ok=b.tier===0||(match&&t.tier>=b.tier);
@@ -905,19 +967,19 @@ function useItem(){
   const bucket=s&&(s.id===I.BUCKET||s.id===I.WBUCKET||s.id===I.LBUCKET);
   const h=raycast(5.5,bucket);
   if(h&&(h.id===B.TABLE||h.id===B.FURNACE)){openInv(h.id===B.TABLE?"table":"furnace");P.swing=1;return;}
-  if(s&&IT[s.id]&&IT[s.id].food&&G.mode==="survival"){if(P.food<20){P.food=Math.min(20,P.food+IT[s.id].food);P.sat=Math.min(P.food,P.sat+3);consumeHeld();renderBars();P.swing=1;}return;}
+  if(s&&IT[s.id]&&IT[s.id].food&&G.mode==="survival"){if(P.food<20){P.food=Math.min(20,P.food+IT[s.id].food);P.sat=Math.min(P.food,P.sat+3);SFX.eat();consumeHeld();renderBars();P.swing=1;}return;}
   if(!h)return;
   if(bucket){
-    if(s.id===I.BUCKET){if(BL[h.id].fluid&&getMeta(h.x,h.y,h.z)===0){const w=h.id===B.WATER;setBlock(h.x,h.y,h.z,0);if(G.mode==="survival")inv[sel]=mkItem(w?I.WBUCKET:I.LBUCKET);hotbarDirty=true;P.swing=1;}return;}
+    if(s.id===I.BUCKET){if(BL[h.id].fluid&&getMeta(h.x,h.y,h.z)===0){const w=h.id===B.WATER;SFX.splash();setBlock(h.x,h.y,h.z,0);if(G.mode==="survival")inv[sel]=mkItem(w?I.WBUCKET:I.LBUCKET);hotbarDirty=true;P.swing=1;}return;}
     const fl=s.id===I.WBUCKET?B.WATER:B.LAVA;let x=h.x,y=h.y,z=h.z;
     if(!BL[h.id].fluid||getMeta(x,y,z)!==0){x+=h.nx;y+=h.ny;z+=h.nz;}
-    const cur_=getBlock(x,y,z);if(cur_===0||(cur_>0&&BL[cur_].fluid)){setBlock(x,y,z,fl,0);if(G.mode==="survival")inv[sel]=mkItem(I.BUCKET);hotbarDirty=true;P.swing=1;}
+    const cur_=getBlock(x,y,z);if(cur_===0||(cur_>0&&BL[cur_].fluid)){SFX.splash();setBlock(x,y,z,fl,0);if(G.mode==="survival")inv[sel]=mkItem(I.BUCKET);hotbarDirty=true;P.swing=1;}
     return;}
   if(!s||!BL[s.id]||BL[h.id].fluid)return;
   const x=h.x+h.nx,y=h.y+h.ny,z=h.z+h.nz;
   const cur_=getBlock(x,y,z);if(cur_===-1||y<0||y>=WH||(cur_!==0&&!BL[cur_].fluid))return;
   if(BL[s.id].solid&&overlapsPlayer(x,y,z))return;
-  setBlock(x,y,z,s.id,0);consumeHeld();P.swing=1;
+  setBlock(x,y,z,s.id,0);SFX.put();consumeHeld();P.swing=1;
 }
 // ===== Выпавшие предметы =====
 const drops=[];
@@ -925,7 +987,7 @@ function spawnDrop(x,y,z,id,n,dur){drops.push({x,y,z,vx:(Math.random()-.5)*2.2,v
 function updateDrops(dt){
   for(let i=drops.length-1;i>=0;i--){const d=drops[i];d.age+=dt;
     const dx=P.x-d.x,dy=P.y+.8-d.y,dz=P.z-d.z,dist=Math.hypot(dx,dy,dz);
-    if(d.age>.5&&dist<1.3){const left=addItem(d.id,d.n,d.dur);if(left<=0){drops.splice(i,1);hotbarDirty=true;continue;}d.n=left;}
+    if(d.age>.5&&dist<1.3){const left=addItem(d.id,d.n,d.dur);if(left<=0){SFX.pick();drops.splice(i,1);hotbarDirty=true;continue;}d.n=left;}
     if(d.age>.5&&dist<2.8&&dist>.01){const k=7*dt/dist;d.vx+=dx*k*2;d.vz+=dz*k*2;d.vy+=dy*k*2+9*dt;}
     d.vy-=25*dt;
     const nx=d.x+d.vx*dt;if(!isSolid(Math.floor(nx),Math.floor(d.y),Math.floor(d.z)))d.x=nx;else d.vx=0;
@@ -981,9 +1043,9 @@ function updateMob(m,dt){
   if(m.moving)m.anim+=dt*sp*3.2;
   const bid=getBlock(fx,Math.floor(m.y),fz);if(bid===B.LAVA||m.y<-20)killMob(m,true);
 }
-function killMob(m,noDrop){const i=mobs.indexOf(m);if(i>=0)mobs.splice(i,1);if(noDrop)return;
+function killMob(m,noDrop){const i=mobs.indexOf(m);if(i>=0)mobs.splice(i,1);if(noDrop)return;SFX.mobDie();
   const D=MD[m.type],n=D.drop[1]+Math.floor(Math.random()*(D.drop[2]-D.drop[1]+1));if(n>0)spawnDrop(m.x,m.y+.5,m.z,D.drop[0],n);}
-function hitMob(m,dmg){m.hp-=dmg;m.hurt=.4;const d=Math.hypot(m.x-P.x,m.z-P.z)||1;m.kx=(m.x-P.x)/d*6;m.kz=(m.z-P.z)/d*6;m.vy=4.5;
+function hitMob(m,dmg){SFX.mobHit();m.hp-=dmg;m.hurt=.4;const d=Math.hypot(m.x-P.x,m.z-P.z)||1;m.kx=(m.x-P.x)/d*6;m.kz=(m.z-P.z)/d*6;m.vy=4.5;
   if(MD[m.type].passive)m.flee=4;if(m.hp<=0)killMob(m);}
 function eyeDir(){return[-Math.sin(P.yaw)*Math.cos(P.pitch),Math.sin(P.pitch),-Math.cos(P.yaw)*Math.cos(P.pitch)];}
 function targetMob(){
@@ -1017,7 +1079,7 @@ function trySpawn(){
       if(getBlock(x,y,z)===0&&getBlock(x,y+1,z)===0&&getBlock(x,y+2,z)===0&&isSolid(x,y-1,z)&&!BL[getBlock(x,y-1,z)].fluid){spawnMob("zombie",x+.5,y+.01,z+.5);break;}}
   }
 }
-function updateMobs(dt){
+function updateMobs(dt){SFX.ambient(dt);
   atkCd=Math.max(0,atkCd-dt);
   spawnT-=dt;if(spawnT<=0){spawnT=1.6;trySpawn();}
   for(let i=mobs.length-1;i>=0;i--){const m=mobs[i];
@@ -1180,11 +1242,12 @@ $("bMode").onclick=()=>{setMode(G.mode==="creative"?"survival":"creative");};
 $("bSet").onclick=()=>{show("pause",false);show("settings",true);};
 $("sBack").onclick=()=>{show("settings",false);show("pause",true);};
 const cyc=(arr,v)=>arr[(arr.indexOf(v)+1)%arr.length];
-function setLabels(){$("sRD").textContent="Дальность прорисовки: "+opt.rd+" чанков";$("sFov").textContent="Поле зрения: "+opt.fov;$("sSens").textContent="Чувствительность: "+Math.round(opt.sens*100)+"%";$("sInfo").textContent="Отладочная информация: "+(opt.info?"Вкл":"Выкл");}
+function setLabels(){$("sVol").textContent="Звуки: "+(SFX.vol()>0?Math.round(SFX.vol()*100)+"%":"Выкл");$("sRD").textContent="Дальность прорисовки: "+opt.rd+" чанков";$("sFov").textContent="Поле зрения: "+opt.fov;$("sSens").textContent="Чувствительность: "+Math.round(opt.sens*100)+"%";$("sInfo").textContent="Отладочная информация: "+(opt.info?"Вкл":"Выкл");}
 $("sRD").onclick=()=>{opt.rd=cyc([3,4,5,6,8,10,12],opt.rd);planChunks();setLabels();};
 $("sFov").onclick=()=>{opt.fov=cyc([60,70,80,90,100],opt.fov);setLabels();};
 $("sSens").onclick=()=>{opt.sens=cyc([.5,.75,1,1.5,2],opt.sens);setLabels();};
 $("sInfo").onclick=()=>{opt.info=!opt.info;setLabels();};
+$("sVol").onclick=()=>{const v=cyc([0,.3,.6,.8,1],SFX.vol());SFX.setVol(v);cfg.vol=v;saveCfg();setLabels();SFX.unlock();SFX.click();};
 let newConfirm=0;
 $("bNew").onclick=()=>{if(!newConfirm){newConfirm=1;$("bNew").textContent="Нажмите ещё раз: старый мир пропадёт";setTimeout(()=>{newConfirm=0;$("bNew").textContent="Создать новый мир";},3000);return;}
   newConfirm=0;$("bNew").textContent="Создать новый мир";newWorld(false);renderBars();resumeGame();};
@@ -1243,11 +1306,11 @@ if(isTouch){
 requestAnimationFrame(frame);
 // ===== Лаунчер BlackCraft =====
 const LS_KEY="blackcraft.launcher.v1";
-const CFG0={nick:"Player",mode:"survival",rd:6,fov:70,sens:1,info:true};
+const CFG0={nick:"Player",mode:"survival",rd:6,fov:70,sens:1,info:true,vol:.6};
 let cfg=Object.assign({},CFG0);
 try{Object.assign(cfg,JSON.parse(localStorage.getItem(LS_KEY)||"{}"));}catch(e){}
 function saveCfg(){try{localStorage.setItem(LS_KEY,JSON.stringify(cfg));}catch(e){}}
-function applyCfg(){opt.rd=cfg.rd;opt.fov=cfg.fov;opt.sens=cfg.sens;opt.info=cfg.info;playerName=cfg.nick;setLabels();$("lnick").textContent=cfg.nick;}
+function applyCfg(){SFX.setVol(cfg.vol);opt.rd=cfg.rd;opt.fov=cfg.fov;opt.sens=cfg.sens;opt.info=cfg.info;playerName=cfg.nick;setLabels();$("lnick").textContent=cfg.nick;}
 function fillSelect(id,items,cur){const el=$(id);el.innerHTML="";items.forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;if(String(v)===String(cur))o.selected=true;el.appendChild(o);});}
 function syncLauncher(){
   $("inNick").value=cfg.nick;$("inMode").value=cfg.mode;
@@ -1255,11 +1318,13 @@ function syncLauncher(){
   fillSelect("sFovL",[60,70,80,90,100].map(v=>[v,String(v)]),cfg.fov);
   fillSelect("sSensL",[.5,.75,1,1.5,2].map(v=>[v,Math.round(v*100)+"%"]),cfg.sens);
   $("sInfoL").value=cfg.info?"1":"0";
+  fillSelect("sVolL",[[0,"Выкл"],[.3,"30%"],[.6,"60%"],[.8,"80%"],[1,"100%"]],cfg.vol);
   applyCfg();
 }
 $("sRd").onchange=e=>{cfg.rd=+e.target.value;saveCfg();applyCfg();};
 $("sFovL").onchange=e=>{cfg.fov=+e.target.value;saveCfg();applyCfg();};
 $("sSensL").onchange=e=>{cfg.sens=+e.target.value;saveCfg();applyCfg();};
+$("sVolL").onchange=e=>{cfg.vol=+e.target.value;saveCfg();applyCfg();SFX.unlock();SFX.click();};
 $("sInfoL").onchange=e=>{cfg.info=e.target.value==="1";saveCfg();applyCfg();};
 $("inMode").onchange=e=>{cfg.mode=e.target.value;saveCfg();};
 $("inNick").oninput=e=>{$("lnick").textContent=e.target.value.trim()||"Player";};
