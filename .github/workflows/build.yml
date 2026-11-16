@@ -1,9 +1,9 @@
 name: Сборка BlackCraft APK
 
 on:
-  workflow_dispatch:          # кнопка «Run workflow» на вкладке Actions
+  workflow_dispatch:
   push:
-    branches: [main]          # сборка запускается и сама при каждой загрузке файлов
+    branches: [main]
     paths-ignore:
       - "README.md"
 
@@ -34,13 +34,14 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Android SDK Platform 36 и Build-Tools 36.0.0
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDKM="$(command -v sdkmanager || echo "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager")"
+          echo "sdkmanager=$SDKM"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Версии инструментов
         run: |
