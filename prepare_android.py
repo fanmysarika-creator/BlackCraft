@@ -16,8 +16,8 @@ import sys
 ROOT = os.path.dirname(os.path.abspath(__file__))
 APP_ID = "com.blackcraft.game"
 MIN_SDK = 24
-VERSION_NAME = "1.01"
-VERSION_CODE = 2
+VERSION_NAME = "1.02"
+VERSION_CODE = 3
 GAME_FILES = [
     "index.html", "manifest.webmanifest", "sw.js",
     "icon-192.png", "icon-512.png", "icon-maskable-512.png",
