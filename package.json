@@ -1,6 +1,6 @@
 {
   "name": "blackcraft-android",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "BlackCraft — Android-приложение (Capacitor 8)",
   "private": true,
   "engines": {
